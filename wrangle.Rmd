@@ -1,0 +1,147 @@
+---
+title: "Data Wrangling Assignment #1"
+output: html_notebook
+---
+### Kenneth Larrieu
+
+``` {r include = FALSE}
+library(tidyverse)
+```
+
+## Import and Tidy
+1. Read the gazetteer data as-is (all columns; no type conversion) into a ```gaz_raw``` tibble.
+
+``` {r}
+gaz_raw <- read_delim("C:/Users/pc/Desktop/gaz_data/CA_Features_20180401.txt", "|")
+gaz_raw
+```
+
+2. Select columns to include in ```gaz``` tibble.
+``` {r}
+gaz <- gaz_raw %>% select(FEATURE_ID,
+                          FEATURE_NAME,
+                          FEATURE_CLASS,
+                          STATE_ALPHA,
+                          COUNTY_NAME,
+                          PRIM_LAT_DEC,
+                          PRIM_LONG_DEC,
+                          SOURCE_LAT_DEC,
+                          SOURCE_LONG_DEC,
+                          ELEV_IN_M,
+                          MAP_NAME,
+                          DATE_CREATED,
+                          DATE_EDITED)
+gaz
+```
+3. Convert ```gaz``` columns to correct type (everything auto-parsed correctly but dates). Convert any placeholders for unknown data to ```NA```
+```{r}
+gaz <- gaz %>%
+  mutate(DATE_CREATED = parse_date(DATE_CREATED, format = "%M/%d/%Y"),
+          DATE_EDITED = parse_date(DATE_EDITED, format = "%M/%d/%Y"))
+
+gaz <- gaz %>%
+  mutate(PRIM_LAT_DEC = replace(PRIM_LAT_DEC, PRIM_LAT_DEC == 0, NA)) %>%
+  mutate(PRIM_LONG_DEC = replace(PRIM_LONG_DEC, PRIM_LONG_DEC == 0, NA)) %>%
+  mutate(SOURCE_LAT_DEC = replace(SOURCE_LAT_DEC, SOURCE_LAT_DEC == 0, NA)) %>%
+  mutate(SOURCE_LONG_DEC = replace(SOURCE_LONG_DEC, SOURCE_LONG_DEC == 0, NA))
+
+gaz
+```
+
+
+4. Filter out missing primary lat/long, only include places in CA
+```{r}
+gaz <- gaz %>%
+  filter(!is.na(PRIM_LAT_DEC) & !is.na(PRIM_LONG_DEC)) %>%
+  filter(STATE_ALPHA == "CA")
+
+gaz
+```
+
+5. Write out filtered data to CSV
+```{r}
+write_delim(gaz, "C:/Users/pc/Desktop/gaz_data/gaz.csv", delim = "|")
+```
+
+## Analyze
+
+1. What is the most-frequently-occuring feature name?
+```{r}
+top_feature = gaz %>%
+  group_by(FEATURE_NAME) %>%
+  summarize(count = n()) %>%
+  filter(count == max(count))
+
+top_feature
+```
+
+2. What is the least-frequently-occuring feature class?
+```{r}
+bottomm_class = gaz %>%
+  group_by(FEATURE_CLASS) %>%
+  summarize(count = n()) %>%
+  filter(count == min(count))
+bottomm_class
+```
+
+3. What is the approximate center point of each county?
+```{r}
+#center of bounding box for each county
+county_centers = gaz %>%
+  filter(!is.na(COUNTY_NAME)) %>%
+  #remove linear features (features with a source lat/long), only want point features
+  filter(is.na(SOURCE_LAT_DEC) | is.na(SOURCE_LONG_DEC)) %>%
+  group_by(COUNTY_NAME) %>%
+  summarize(min_lat = min(PRIM_LAT_DEC), max_lat = max(PRIM_LAT_DEC),
+            min_long = min(PRIM_LONG_DEC), max_long = max(PRIM_LONG_DEC)) %>%
+  mutate(center_lat = (min_lat+max_lat)/2, center_long = (min_long+max_long)/2) %>%
+  select(COUNTY_NAME, center_lat, center_long)
+county_centers
+```
+
+4. What are the fractions of the total number of features in each county that are natural? man-made?
+```{r}
+#determine which features are manmade and natural
+class_types = gaz %>%
+  group_by(FEATURE_CLASS) %>%
+  summarize() %>%
+  mutate(type = ifelse(FEATURE_CLASS %in% c("Airport",
+                                            "Bridge",
+                                            "Building",
+                                            "Canal",
+                                            "Cemetery",
+                                            "Census",
+                                            "Church",
+                                            "Civil",
+                                            "Dam",
+                                            "Harbor",
+                                            "Hospital",
+                                            "Locale",
+                                            "Military",
+                                            "Mine",
+                                            "Oilfield",
+                                            "Populated Place",
+                                            "Post Office",
+                                            "Reservoir",
+                                            "School",
+                                            "Tower",
+                                            "Well"),
+                       "manmade", "natural"))
+
+gaz = gaz %>%
+  left_join(class_types, by = "FEATURE_CLASS")
+
+#count number of manmade and natural features in each county
+types_counts = gaz %>%
+  filter(!is.na(COUNTY_NAME)) %>%
+  group_by(COUNTY_NAME, type) %>%
+  summarize(count = n())
+
+#get fractions
+types_counts = types_counts %>%
+  mutate(fraction = count/sum(count)) %>%
+  select(COUNTY_NAME, type, fraction) %>%
+  spread(key = type, value = fraction) %>%
+  rename(manmade_fraction = manmade, natural_fraction = natural)
+types_counts
+```
