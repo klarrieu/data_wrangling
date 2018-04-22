@@ -1,24 +1,25 @@
 ---
-title: "Data Wrangling Assignment #1"
+title: 'Data Wrangling Assignment #1'
+author: "Kenneth Larrieu"
 output: html_notebook
 ---
-### Kenneth Larrieu
+
 
 ``` {r include = FALSE}
 library(tidyverse)
 ```
 
 ## Import and Tidy
-1. Read the gazetteer data as-is (all columns; no type conversion) into a ```gaz_raw``` tibble.
+1. Read the gazetteer data as-is (all columns; no type conversion) into a `gaz_raw` tibble.
 
 ``` {r}
-gaz_raw <- read_delim("C:/Users/pc/Desktop/gaz_data/CA_Features_20180401.txt", "|")
+gaz_raw = read_delim("C:/Users/pc/Desktop/gaz_data/CA_Features_20180401.txt", "|", col_types = cols(.default = col_character()))
 gaz_raw
 ```
 
-2. Select columns to include in ```gaz``` tibble.
+2. Select columns to include in `gaz` tibble.
 ``` {r}
-gaz <- gaz_raw %>% select(FEATURE_ID,
+gaz = gaz_raw %>% select(FEATURE_ID,
                           FEATURE_NAME,
                           FEATURE_CLASS,
                           STATE_ALPHA,
@@ -33,13 +34,21 @@ gaz <- gaz_raw %>% select(FEATURE_ID,
                           DATE_EDITED)
 gaz
 ```
-3. Convert ```gaz``` columns to correct type (everything auto-parsed correctly but dates). Convert any placeholders for unknown data to ```NA```
+3. Convert `gaz` columns to correct type. Convert any placeholders for unknown data to `NA`
 ```{r}
-gaz <- gaz %>%
-  mutate(DATE_CREATED = parse_date(DATE_CREATED, format = "%M/%d/%Y"),
-          DATE_EDITED = parse_date(DATE_EDITED, format = "%M/%d/%Y"))
+gaz = gaz %>%
+  type_convert(col_types = cols(
+    FEATURE_ID = col_integer(),
+    PRIM_LAT_DEC = col_double(),
+    PRIM_LONG_DEC = col_double(),
+    SOURCE_LAT_DEC = col_double(),
+    SOURCE_LONG_DEC = col_double(),
+    ELEV_IN_M = col_integer(),
+    DATE_CREATED = col_date(format = "%M/%d/%Y"),
+    DATE_EDITED = col_date(format = "%M/%d/%Y")
+          ))
 
-gaz <- gaz %>%
+gaz = gaz %>%
   mutate(PRIM_LAT_DEC = replace(PRIM_LAT_DEC, PRIM_LAT_DEC == 0, NA)) %>%
   mutate(PRIM_LONG_DEC = replace(PRIM_LONG_DEC, PRIM_LONG_DEC == 0, NA)) %>%
   mutate(SOURCE_LAT_DEC = replace(SOURCE_LAT_DEC, SOURCE_LAT_DEC == 0, NA)) %>%
@@ -51,7 +60,7 @@ gaz
 
 4. Filter out missing primary lat/long, only include places in CA
 ```{r}
-gaz <- gaz %>%
+gaz = gaz %>%
   filter(!is.na(PRIM_LAT_DEC) & !is.na(PRIM_LONG_DEC)) %>%
   filter(STATE_ALPHA == "CA")
 
