@@ -1,7 +1,7 @@
 ---
 title: 'Data Wrangling Assignment #1'
 author: "Kenneth Larrieu"
-output: html_notebook
+output: html_document
 ---
 
 
@@ -13,7 +13,7 @@ library(tidyverse)
 1. Read the gazetteer data as-is (all columns; no type conversion) into a `gaz_raw` tibble.
 
 ``` {r}
-gaz_raw = read_delim("C:/Users/pc/Desktop/gaz_data/CA_Features_20180401.txt", "|", col_types = cols(.default = col_character()))
+gaz_raw = read_delim("CA_Features_20180401.txt", "|", col_types = cols(.default = col_character()))
 gaz_raw
 ```
 
@@ -49,11 +49,11 @@ gaz = gaz %>%
           ))
 
 gaz = gaz %>%
+  mutate(MAP_NAME = replace(MAP_NAME, MAP_NAME == "Unknown", NA)) %>%
   mutate(PRIM_LAT_DEC = replace(PRIM_LAT_DEC, PRIM_LAT_DEC == 0, NA)) %>%
   mutate(PRIM_LONG_DEC = replace(PRIM_LONG_DEC, PRIM_LONG_DEC == 0, NA)) %>%
   mutate(SOURCE_LAT_DEC = replace(SOURCE_LAT_DEC, SOURCE_LAT_DEC == 0, NA)) %>%
   mutate(SOURCE_LONG_DEC = replace(SOURCE_LONG_DEC, SOURCE_LONG_DEC == 0, NA))
-
 gaz
 ```
 
@@ -69,7 +69,7 @@ gaz
 
 5. Write out filtered data to CSV
 ```{r}
-write_delim(gaz, "C:/Users/pc/Desktop/gaz_data/gaz.csv", delim = "|")
+write_delim(gaz, "gaz.csv", delim = "|")
 ```
 
 ## Analyze
@@ -95,7 +95,7 @@ bottomm_class
 
 3. What is the approximate center point of each county?
 ```{r}
-#center of bounding box for each county
+#find center of bounding box for each county
 county_centers = gaz %>%
   filter(!is.na(COUNTY_NAME)) %>%
   #remove linear features (features with a source lat/long), only want point features
@@ -111,17 +111,19 @@ county_centers
 4. What are the fractions of the total number of features in each county that are natural? man-made?
 ```{r}
 #determine which features are manmade and natural
+#some features were ambiguous (could be natural or manmade): Census, Crater, Levee, Park, Trail, Tunnel
+
 class_types = gaz %>%
   group_by(FEATURE_CLASS) %>%
   summarize() %>%
-  mutate(type = ifelse(FEATURE_CLASS %in% c("Airport",
+  mutate(type = case_when(FEATURE_CLASS %in% c("Airport",
                                             "Bridge",
                                             "Building",
                                             "Canal",
                                             "Cemetery",
-                                            "Census",
                                             "Church",
                                             "Civil",
+                                            "Crossing",
                                             "Dam",
                                             "Harbor",
                                             "Hospital",
@@ -134,8 +136,50 @@ class_types = gaz %>%
                                             "Reservoir",
                                             "School",
                                             "Tower",
-                                            "Well"),
-                       "manmade", "natural"))
+                                            "Well")
+                          
+                                            ~ "manmade",
+                          
+                          FEATURE_CLASS %in% c("Arch",
+                                               "Area",
+                                               "Arroyo",
+                                               "Bar",
+                                               "Basin",
+                                               "Bay",
+                                               "Beach",
+                                               "Bench",
+                                               "Bend",
+                                               "Cape",
+                                               "Cave",
+                                               "Channel",
+                                               "Cliff",
+                                               "Falls",
+                                               "Flat",
+                                               "Forest",
+                                               "Gap",
+                                               "Glacier",
+                                               "Gut",
+                                               "Island",
+                                               "Isthmus",
+                                               "Lake",
+                                               "Lava",
+                                               "Pillar",
+                                               "Plain",
+                                               "Range",
+                                               "Rapids",
+                                               "Reserve",
+                                               "Ridge",
+                                               "Sea",
+                                               "Slope",
+                                               "Spring",
+                                               "Stream",
+                                               "Summit",
+                                               "Swamp",
+                                               "Valley",
+                                               "Woods")
+                          
+                                              ~ "natural"
+                          ))
 
 gaz = gaz %>%
   left_join(class_types, by = "FEATURE_CLASS")
@@ -151,6 +195,6 @@ types_counts = types_counts %>%
   mutate(fraction = count/sum(count)) %>%
   select(COUNTY_NAME, type, fraction) %>%
   spread(key = type, value = fraction) %>%
-  rename(manmade_fraction = manmade, natural_fraction = natural)
+  rename(manmade_fraction = manmade, natural_fraction = natural, ambiguous_fraction = "<NA>")
 types_counts
 ```
